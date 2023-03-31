@@ -1,90 +1,92 @@
 import PropTypes from 'prop-types';
-import { Component } from 'react';
-import Searchbar from './Searchbar.jsx';
 import axios from 'axios';
+import { Searchbar } from './Searchbar.jsx';
 import { ImageGallery } from './ImageGallery.jsx';
-import ImageGalleryItem from './ImageGalleryItem.jsx';
-import Button from './Button.jsx';
+import { ImageGalleryItem } from './ImageGalleryItem.jsx';
+import { Button } from './Button.jsx';
 import { Loader } from './Loader.jsx';
-import Modal from './Modal.jsx';
+import { Modal } from './Modal.jsx';
+import { useState } from 'react';
 axios.defaults.baseURL = 'https://pixabay.com/api';
-export class App extends Component {
-  API_KEY = '33287723-ac3e9d0bf292ee3d9e11c0a66';
 
-  state = {
-    query: '',
-    responses: [],
-    isLoading: false,
-    hideModal: true,
-    largeImage: '',
-    page: 1,
-  };
+export const App = () => {
+  const API_KEY = '33287723-ac3e9d0bf292ee3d9e11c0a66';
+  const [currentPage, setCurrentPage] = useState(1);
+  const [query, setQuery] = useState('');
+  const [fetchedImages, setFetchedImages] = useState([]);
+  const [clickedImg, setClickedImg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  incPage = () => {
-    this.handleSearch(this.state.query);
-  };
-
-  handleSearch = async query => {
-    this.setState({ isLoading: true });
+  const fetchImagesForPage = async (pageNumber, query) => {
     const response = await axios.get(
-      `/?q=${query}&page=${this.state.page}&key=${this.API_KEY}&image_type=photo&orientation=horizontal&per_page=12`
+      `/?q=${query}&page=${pageNumber}&key=${API_KEY}&image_type=photo&orientation=horizontal&per_page=12`
     );
-    this.setState(prevState => ({ page: prevState.page + 1 }));
-    const data = response.data.hits;
-    if (data.length === 0) {
-      this.setState({ isLoading: false });
-      window.alert('Looks like there are no images matching your search');
+    const data = await response.data.hits;
+    return data;
+  };
+
+  const handleLoadMoreClick = async () => {
+    setIsLoading(true);
+    const nextPage = currentPage + 1;
+    const newImages = await fetchImagesForPage(nextPage, query);
+    setFetchedImages([...fetchedImages, ...newImages]);
+    setIsLoading(false);
+    setCurrentPage(nextPage);
+  };
+
+  const handleQuery = event => {
+    event.preventDefault();
+    const inputValue = event.target.elements.searchInput.value;
+    setCurrentPage(1);
+    if (query !== inputValue) {
+      setQuery(inputValue);
+      fetchInitialImages(inputValue);
     } else {
-      this.setState(prevState => ({
-        responses: [...prevState.responses, ...data],
-        isLoading: false,
-      }));
+      window.alert(
+        'Your query is the same as previous one. Try something different'
+      );
     }
   };
 
-  componentDidUpdate = (prevProps, prevState) => {
-    if (prevState.query !== this.state.query)
-      this.handleSearch(this.state.query);
+  const fetchInitialImages = async query => {
+    setIsLoading(true);
+    const initialImages = await fetchImagesForPage(currentPage, query);
+    if (initialImages.length === 0) {
+      setIsLoading(false);
+      setFetchedImages([]);
+      window.alert('Looks like there are no images matching your search');
+    } else {
+      setFetchedImages(initialImages);
+      setIsLoading(false);
+    }
   };
 
-  handleQuery = event => {
-    event.preventDefault();
-    const inputValue = event.target.elements.searchInput.value;
-    if (this.state.query !== inputValue) {
-      this.setState({ responses: [], page: 1 });
-      this.setState({ query: inputValue });
-    } else window.alert("You're testing me, aren't you?");
+  const showModal = image => {
+    setClickedImg(image);
+    setIsModalOpen(true);
   };
 
-  showModal = image => {
-    this.setState({ hideModal: false, largeImage: image });
+  const closeModal = () => {
+    setIsModalOpen(false);
   };
 
-  closeModal = () => {
-    this.setState({ hideModal: true });
-  };
-
-  render() {
-    return (
-      <div className="App">
-        <Searchbar handleSubmit={this.handleQuery}></Searchbar>
-        {this.state.isLoading && <Loader />}
-        <ImageGallery>
-          <ImageGalleryItem
-            fetchedData={this.state.responses}
-            showModal={this.showModal}
-          />
-        </ImageGallery>
-        {this.state.hideModal === false && (
-          <Modal image={this.state.largeImage} closeModal={this.closeModal} />
-        )}
-        {this.state.responses.length > 11 && (
-          <Button handleLoadingMore={this.incPage}></Button>
-        )}
-      </div>
-    );
-  }
-}
+  return (
+    <div className="App">
+      <Searchbar handleSubmit={handleQuery}></Searchbar>
+      <ImageGallery>
+        <ImageGalleryItem fetchedData={fetchedImages} showModal={showModal} />
+      </ImageGallery>
+      {isLoading && <Loader />}
+      {isModalOpen && (
+        <Modal image={clickedImg} closeModal={() => closeModal()} />
+      )}
+      {fetchedImages.length > 11 && (
+        <Button handleLoadingMore={handleLoadMoreClick}></Button>
+      )}
+    </div>
+  );
+};
 
 App.propTypes = {
   API_KEY: PropTypes.string,
